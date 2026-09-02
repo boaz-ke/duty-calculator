@@ -6,6 +6,43 @@ enter the year of manufacture and import route, and see the full tax breakdown.
 Administrators can upload a newly released KRA workbook as a draft and publish
 it once validated — the previous release is kept for audit and rollback.
 
+## Quick start with Docker (recommended)
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then
+run everything with one command:
+
+```bash
+git clone https://github.com/nation9k/duty-calculator.git && cd duty-calculator && docker compose up -d --build
+```
+
+Open http://localhost:8000.
+
+The first run creates an admin account (`admin` / `admin123`) and automatically
+seeds the live CRSP release from the bundled July 2025 workbook. Data persists
+in a Docker volume, so the database, changed passwords and uploaded CRSP
+releases survive restarts.
+
+To set your own admin credentials and session secret before first launch,
+create a `.env` file in the project folder:
+
+```dotenv
+VDC_ADMIN_USER=you
+VDC_ADMIN_PASSWORD="a-strong-password"
+VDC_SECRET="a-long-random-secret"
+PORT=8000
+```
+
+Then start with the same compose command. Change the default password from the
+app after the first run regardless.
+
+Useful commands:
+
+```bash
+docker compose up -d --build   # rebuild and start
+docker compose logs -f          # follow the logs
+docker compose down             # stop (keeps data)
+```
+
 ## What is implemented
 
 - Parser for all four sheets of the July 2025 workbook:
@@ -24,7 +61,8 @@ it once validated — the previous release is kept for audit and rollback.
 
 ## Run locally
 
-Requires Python 3.10+ with Flask and openpyxl:
+Prefer Docker (above) for anything beyond local testing. To run directly,
+requires Python 3.10+ with Flask, openpyxl and gunicorn:
 
 ```bash
 pip install -r requirements.txt
@@ -35,7 +73,8 @@ Then open http://localhost:5000.
 
 On first startup the app parses the bundled `New-CRSP---July-2025.xlsx` and
 creates a live release automatically. The SQLite database lives in
-`data/vdc.sqlite3`.
+`data/vdc.sqlite3`. Flask's development server is fine for local use but use a
+production WSGI server (e.g. gunicorn, as in the Dockerfile) when deploying.
 
 ## Admin
 
