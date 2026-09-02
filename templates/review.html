@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Review {{ release.label }}{% endblock %}
+{% block content %}
+<section class="hero">
+    <div>
+        <h1>Review {{ release.label }}</h1>
+        <p>Source: {{ release.source_filename }} · Status: <span class="status status-{{ release.status }}">{{ release.status }}</span></p>
+    </div>
+    <div class="actions">
+        {% if release.status != 'live' %}
+        <form method="post" action="{{ url_for('main.publish_release', release_id=release.id) }}">
+            <button type="submit" class="primary-button">Approve &amp; make live</button>
+        </form>
+        {% endif %}
+        <a class="button" href="{{ url_for('main.admin') }}">Back to releases</a>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Parsed contents</h2>
+    <div class="stat-grid">
+        <div class="stat"><strong>{{ counts.get('vehicles', 0) }}</strong><span>Motor vehicles</span></div>
+        <div class="stat"><strong>{{ counts.get('motorcycles', 0) }}</strong><span>Motor cycles</span></div>
+        <div class="stat"><strong>{{ counts.get('machinery', 0) }}</strong><span>Tractors / machinery</span></div>
+        <div class="stat"><strong>{{ counts.get('blocks', 0) }}</strong><span>Rate blocks</span></div>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Rate blocks parsed from the TEMPLATE sheet</h2>
+    <table class="release-table">
+        <thead><tr><th>Block</th><th>Duty</th><th>Excise</th><th>VAT</th><th>RDL</th><th>IDF</th></tr></thead>
+        <tbody>
+        {% for block_key, block in blocks.items() %}
+            <tr>
+                <td><code>{{ block_key }}</code><br><small>{{ block.title }}</small></td>
+                <td>{{ "%g%%" | format(block.duty_rate * 100) if block.duty_rate is not none else "—" }}</td>
+                <td>
+                    {% if block.excise_fixed %}
+                        KES {{ block.excise_fixed }}
+                    {% else %}
+                        {{ "%g%%" | format(block.excise_rate * 100) if block.excise_rate is not none else "—" }}
+                    {% endif %}
+                </td>
+                <td>{{ "%g%%" | format(block.vat_rate * 100) if block.vat_rate is not none else "—" }}</td>
+                <td>{{ "%g%%" | format(block.rdl_rate * 100) if block.rdl_rate is not none else "—" }}</td>
+                <td>{{ "%g%%" | format(block.idf_rate * 100) if block.idf_rate is not none else "—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% if warnings %}
+<section class="card">
+    <h2>Data warnings {% if total_warnings > 30 %}(showing first 30 of {{ total_warnings }}){% endif %}</h2>
+    <ul class="warning-list">
+        {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

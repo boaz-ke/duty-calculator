@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Vehicle Duty Calculator{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+</head>
+<body>
+<header class="topbar">
+    <div class="container topbar-inner">
+        <a class="brand" href="{{ url_for('main.index') }}">
+            <img class="brand-logo" src="{{ url_for('static', filename='logo.svg') }}" alt="Vehicle Duty Calculator logo">
+            <span>
+                <strong>Vehicle Duty Calculator</strong>
+                <small>KRA CRSP · Import duty estimate</small>
+            </span>
+        </a>
+        <nav>
+            {% if session.get('is_admin') %}
+                <a href="{{ url_for('main.change_password') }}">Change password</a>
+                <a href="{{ url_for('main.admin') }}">Admin console</a>
+                <form method="post" action="{{ url_for('main.admin_logout') }}" class="inline-form">
+                    <button type="submit" class="link-button">Sign out</button>
+                </form>
+            {% else %}
+                <a href="{{ url_for('main.admin_login') }}" class="nav-cta">Admin</a>
+            {% endif %}
+        </nav>
+    </div>
+</header>
+
+<main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="container footer">
+    Estimates only — not an official KRA assessment.
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

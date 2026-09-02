@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Admin — CRSP releases{% endblock %}
+{% block content %}
+<section class="hero">
+    <div>
+        <h1>CRSP release management</h1>
+        <p>Upload a newly released KRA CRSP workbook. It is stored as a draft for review before it becomes the live calculation source.</p>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Upload new release</h2>
+    <form method="post" action="{{ url_for('main.admin_upload') }}" enctype="multipart/form-data" class="upload-form">
+        <div class="field">
+            <label class="field-label" for="file">Workbook (.xlsx)</label>
+            <input id="file" name="file" type="file" accept=".xlsx" required>
+        </div>
+        <div class="field">
+            <label class="field-label" for="effective_date">Effective date (optional)</label>
+            <input id="effective_date" name="effective_date" type="date">
+            <small class="hint">Defaults to the month/year in the filename.</small>
+        </div>
+        <button type="submit" class="primary-button">Upload &amp; validate</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Releases</h2>
+    <table class="release-table">
+        <thead>
+            <tr>
+                <th>Release</th>
+                <th>Effective</th>
+                <th>Status</th>
+                <th>Rows</th>
+                <th>Uploaded</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for release in releases %}
+            <tr>
+                <td><strong>{{ release.label }}</strong><br><small>{{ release.source_filename }}</small></td>
+                <td>{{ release.effective_date }}</td>
+                <td><span class="status status-{{ release.status }}">{{ release.status }}</span></td>
+                <td>{{ release.catalogue_count | formatnumber }}</td>
+                <td>{{ (release.created_at or "")[:10] }}</td>
+                <td class="actions">
+                    <a class="button small" href="{{ url_for('main.review_release', release_id=release.id) }}">Review</a>
+                    {% if release.status != 'live' %}
+                    <form method="post" action="{{ url_for('main.reactivate_release', release_id=release.id) }}">
+                        <button type="submit" class="button small">Make live</button>
+                    </form>
+                    {% endif %}
+                    {% if release.status == 'draft' %}
+                    <form method="post" action="{{ url_for('main.discard_release', release_id=release.id) }}"
+                          onsubmit="return confirm('Discard this draft?')">
+                        <button type="submit" class="button small danger">Discard</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" class="empty-cell">No releases yet.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+

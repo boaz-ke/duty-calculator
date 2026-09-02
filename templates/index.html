@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="hero">
+    <div>
+        <h1>Estimate import duty in seconds</h1>
+        <p>Pick a vehicle from the KRA CRSP list — or enter one manually — choose the import route and year, and see the full tax breakdown instantly.</p>
+        <div class="example-row">
+            <span>Try:</span>
+            <button type="button" class="example-chip" data-query="Mazda CX-5">Mazda CX-5</button>
+            <button type="button" class="example-chip" data-query="Honda Civic">Honda Civic</button>
+            <button type="button" class="example-chip" data-query="Toyota Land Cruiser">Toyota Land Cruiser</button>
+        </div>
+    </div>
+    {% if release %}
+        <div class="release-badge">
+            <span>Live CRSP</span>
+            <strong>{{ release.label }}</strong>
+            <small>Effective {{ release.effective_date }}</small>
+        </div>
+    {% endif %}
+</section>
+
+{% if not release %}
+    <div class="flash flash-error">No active CRSP release is available. Ask an administrator to publish one.</div>
+{% else %}
+
+<div class="grid">
+    <section class="card">
+        <h2>Vehicle details</h2>
+
+        <label class="field-label" for="vehicle-search">Search KRA CRSP list (make, model or model number)</label>
+        <div class="search-wrap">
+            <input id="vehicle-search" type="search" autocomplete="off"
+                   placeholder="e.g. Toyota Land Cruiser, Honda CBR, MF-385…">
+            <div id="search-results" class="search-results" hidden></div>
+        </div>
+        <p id="selection-note" class="selection-note">No catalogue match? Enter the details manually below.</p>
+
+        <form id="calc-form">
+            <div class="field">
+                <label class="field-label" for="vehicle-type">Vehicle type</label>
+                <select id="vehicle-type" name="vehicle_type" required>
+                    {% for key, label in vehicle_types.items() %}
+                        <option value="{{ key }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label class="field-label" for="fuel">Fuel / engine type</label>
+                    <select id="fuel" name="fuel">
+                        <option value="petrol">Petrol / gasoline</option>
+                        <option value="diesel">Diesel</option>
+                        <option value="electric">Electric</option>
+                        <option value="hybrid">Hybrid / plug-in hybrid</option>
+                        <option value="">Not sure</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label class="field-label" for="engine-cc">Engine capacity (cc)</label>
+                    <input id="engine-cc" name="engine_cc" type="number" min="0" step="1" placeholder="e.g. 1500">
+                </div>
+            </div>
+
+            <div class="field">
+                <span class="field-label">Import route</span>
+                <div class="radio-row">
+                    {% for key, label in routes.items() %}
+                    <label class="radio-card">
+                        <input type="radio" name="route" value="{{ key }}" {% if key == 'direct' %}checked{% endif %}>
+                        <span>{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="field-row">
+                <div class="field">
+                    <label class="field-label" for="yom">Year of manufacture</label>
+                    <input id="yom" name="yom" type="number" min="1950" max="{{ current_year }}"
+                           value="{{ current_year - 4 }}" required>
+                </div>
+                <div class="field">
+                    <label class="field-label" for="extra-dep">Extra depreciation (%)</label>
+                    <input id="extra-dep" name="extra_depreciation" type="number" min="0" max="100" step="1" value="0">
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="field-label" for="crsp">Current Retail Selling Price (KES)</label>
+                <input id="crsp" name="crsp" type="number" min="1" step="0.01" placeholder="e.g. 4500000" required>
+                <small class="hint">Auto-filled when a vehicle is found in the CRSP list; override if needed.</small>
+            </div>
+
+            <button type="submit" class="primary-button" id="calculate-button">Calculate duty</button>
+        </form>
+    </section>
+
+    <section class="card result-card">
+        <h2>Result</h2>
+        <div id="result-empty" class="empty-state">
+            <p>Fill in the vehicle details and press <strong>Calculate duty</strong>.</p>
+        </div>
+        <div id="result" hidden>
+            <div class="result-meta">
+                <p id="result-vehicle" class="result-vehicle"></p>
+                <p id="result-route" class="muted"></p>
+            </div>
+            <table class="amount-table">
+                <tbody id="amount-body"></tbody>
+            </table>
+            <div class="grand-total">
+                <span>Grand total</span>
+                <strong id="grand-total"></strong>
+            </div>
+            <p id="per-1000" class="muted small"></p>
+            <div class="notice">Estimate based on {{ release.label }} guidelines — subject to verification by KRA.</div>
+        </div>
+        <div id="result-error" class="flash flash-error" hidden></div>
+    </section>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.CALC_APP = {
+        searchUrl: "{{ url_for('main.api_search') }}",
+        calculateUrl: "{{ url_for('main.api_calculate') }}",
+    };
+</script>
+<script src="{{ url_for('static', filename='calculator.js') }}?v=3"></script>
+{% endblock %}
