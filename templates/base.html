@@ -4,14 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Vehicle Duty Calculator{% endblock %}</title>
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='logo.svg') }}?v=4">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=4">
 </head>
 <body>
 <header class="topbar">
     <div class="container topbar-inner">
         <a class="brand" href="{{ url_for('main.index') }}">
-            <img class="brand-logo" src="{{ url_for('static', filename='logo.svg') }}" alt="Vehicle Duty Calculator logo">
+            <img class="brand-logo" src="{{ url_for('static', filename='logo.svg') }}?v=4" alt="Vehicle Duty Calculator logo">
             <span>
                 <strong>Vehicle Duty Calculator</strong>
                 <small>KRA CRSP · Import duty estimate</small>

@@ -3,8 +3,9 @@
 
 <section class="hero">
     <div>
-        <h1>Estimate import duty in seconds</h1>
-        <p>Pick a vehicle from the KRA CRSP list — or enter one manually — choose the import route and year, and see the full tax breakdown instantly.</p>
+        <p class="eyebrow">KRA CRSP &middot; {% if release %}{{ release.label }} edition{% else %}Import duty estimator{% endif %}</p>
+        <h1>Know the full cost before you import.</h1>
+        <p>Search the KRA catalogue, choose the import route and year, and see exactly where every shilling goes.</p>
         <div class="example-row">
             <span>Try:</span>
             <button type="button" class="example-chip" data-query="Mazda CX-5">Mazda CX-5</button>
@@ -132,5 +133,5 @@
         calculateUrl: "{{ url_for('main.api_calculate') }}",
     };
 </script>
-<script src="{{ url_for('static', filename='calculator.js') }}?v=3"></script>
+<script src="{{ url_for('static', filename='calculator.js') }}?v=4"></script>
 {% endblock %}

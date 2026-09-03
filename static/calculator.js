@@ -117,6 +117,7 @@
         resultsBox.hidden = true;
         selectionNote.textContent =
             "Catalogue match selected — details below were auto-filled. You can still adjust them.";
+        selectionNote.classList.add("is-match");
         const type =
             row.category === "motorcycle" ? "motorcycle" :
             row.category === "machinery" ? "machinery" :
@@ -131,6 +132,9 @@
     }
 
     searchInput.addEventListener("input", () => {
+        selectedRow = null;
+        selectionNote.textContent = "No catalogue match? Enter the details manually below.";
+        selectionNote.classList.remove("is-match");
         clearTimeout(searchTimer);
         searchTimer = setTimeout(search, 280);
     });
@@ -143,6 +147,7 @@
     crsp.addEventListener("input", () => {
         selectedRow = null;
         selectionNote.textContent = "No catalogue match? Enter the details manually below.";
+        selectionNote.classList.remove("is-match");
     });
 
     const rows = [
