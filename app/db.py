@@ -361,7 +361,13 @@ def search_catalogue(
         where.append("(" + " AND ".join(token_conditions) + ")")
     sql = f"""
         SELECT * FROM catalogue_rows
-        WHERE {' AND '.join(where)}
+        WHERE id IN (
+            SELECT MIN(id) FROM catalogue_rows
+            WHERE {' AND '.join(where)}
+            GROUP BY category, make, model, model_number, transmission, drive,
+                     engine_raw, engine_cc, engine_hp, engine_kwh, engine_kw,
+                     body_raw, body_class, fuel_raw, fuel_class, seating, crsp
+        )
         ORDER BY CASE WHEN make LIKE ? THEN 0 ELSE 1 END, make, model, model_number
         LIMIT ?
     """

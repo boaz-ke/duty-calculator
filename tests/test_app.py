@@ -49,6 +49,38 @@ class AppIntegrationTest(unittest.TestCase):
         self.assertIn("grand_total", data["result"])
         self.assertGreater(data["result"]["grand_total"], 0)
 
+    def test_search_deduplicates_identical_suggestions(self):
+        response = self.client.get("/api/search?q=suzuki")
+        self.assertEqual(response.status_code, 200)
+        results = response.get_json()["results"]
+        self.assertTrue(results)
+
+        seen = set()
+        duplicates = 0
+        for row in results:
+            key = (row["display"], row["spec"], row["crsp"])
+            if key in seen:
+                duplicates += 1
+            seen.add(key)
+        self.assertEqual(duplicates, 0)
+
+        # Config variants (e.g. 2WD vs 4WD) stay as separate, labelled options.
+        variants = self.client.get("/api/search?q=suzuki alto hybrid x").get_json()["results"]
+        variant_specs = {
+            row["spec"]
+            for row in variants
+            if row["display"] == "SUZUKI ALTO HYBRID X (5AA-HA97S/ABXB)"
+        }
+        self.assertGreaterEqual(len(variant_specs), 2)
+        self.assertTrue(any("2WD" in spec for spec in variant_specs))
+        self.assertTrue(any("4WD" in spec for spec in variant_specs))
+
+        # Same-looking suggestions with genuinely different prices must survive.
+        priced = self.client.get("/api/search?q=suzuki address v50").get_json()["results"]
+        prices = {round(row["crsp"], 2) for row in priced}
+        self.assertEqual(len(prices), len(priced))
+        self.assertGreaterEqual(len(prices), 2)
+
     def test_index_loads_calculator_javascript(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)

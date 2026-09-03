@@ -43,6 +43,14 @@ def _live_release():
 
 def _row_payload(row: dict) -> dict:
     """Turn a DB catalogue row into a small API payload."""
+    config_bits = []
+    if row["category"] == "vehicle":
+        if row["transmission"]:
+            config_bits.append(row["transmission"])
+        if row["drive"]:
+            config_bits.append(row["drive"])
+    elif row["category"] == "motorcycle" and row["transmission"]:
+        config_bits.append(row["transmission"])
     return {
         "id": row["id"],
         "category": row["category"],
@@ -61,9 +69,12 @@ def _row_payload(row: dict) -> dict:
                 row["fuel_raw"] or "",
                 row["body_raw"] or "",
                 f"{row['seating']} seats" if row["seating"] else "",
+                " · ".join(config_bits),
             )
             if part
         ),
+        "transmission": row["transmission"],
+        "drive": row["drive"],
         "engine_cc": row["engine_cc"],
         "engine_kwh": row["engine_kwh"],
         "engine_hp": row["engine_hp"],
