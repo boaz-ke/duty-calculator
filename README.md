@@ -12,7 +12,7 @@ Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then
 run everything with one command:
 
 ```bash
-git clone https://github.com/nation9k/duty-calculator.git && cd duty-calculator && docker compose up -d --build
+git clone https://github.com/boaz-ke/duty-calculator.git && cd duty-calculator && docker compose up -d --build
 ```
 
 Open http://localhost:8000.
