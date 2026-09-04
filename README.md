@@ -6,6 +6,8 @@ enter the year of manufacture and import route, and see the full tax breakdown.
 Administrators can upload a newly released KRA workbook as a draft and publish
 it once validated — the previous release is kept for audit and rollback.
 
+The public instance is live at [dutycalculator.sahihi.net](https://dutycalculator.sahihi.net/).
+
 ## Quick start with Docker (recommended)
 
 Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then
@@ -30,6 +32,8 @@ VDC_ADMIN_USER=you
 VDC_ADMIN_PASSWORD="a-strong-password"
 VDC_SECRET="a-long-random-secret"
 VDC_ADMIN_PATH="a-private-admin-slug"
+# Only needed when the app is served through a trusted reverse proxy.
+VDC_TRUST_X_REAL_IP=false
 PORT=8000
 ```
 
@@ -58,6 +62,8 @@ docker compose down             # stop (keeps data)
 - Calculation API and responsive web UI.
 - Admin upload flow: parse → validate → review rates and warnings → make live,
   archive old release, or reactivate a past release.
+- Admin sign-in audit: hidden configurable admin URL, escalating per-IP login
+  lockouts, and a sign-in activity view (logins, failed attempts, lockouts).
 - Unit/integration tests with golden values taken straight from the workbook.
 
 ## Run locally
@@ -88,6 +94,7 @@ only reachable by knowing that path:
 - `/a-private-admin-slug/login` — sign in
 - `/a-private-admin-slug` — release management
 - `/a-private-admin-slug/password` — change the admin password
+- `/a-private-admin-slug/activity` — sign-in activity and lockouts
 
 Failed sign-ins are rate limited per IP and the state persists in the database:
 three consecutive failures lock sign-in for 30 minutes. If an IP triggers
@@ -104,10 +111,10 @@ dutycalculator.sahihi.net:
    `https://www.cloudflare.com/ips-v4` and `.../ips-v6`, then add
    `real_ip_header CF-Connecting-IP;`. NPM's bundled config already forwards
    the resolved address to the app as `X-Real-IP`.
-2. Set `VDC_TRUST_X_REAL_IP=true` in the app environment (add it to the
-   `.env` sample above). This is the switch that makes Flask use `X-Real-IP`
-   for sign-in lockouts and activity logging. Keep it `false` unless the
-   app is only reachable through the trusted proxy.
+2. Set `VDC_TRUST_X_REAL_IP=true` in the app environment (the `.env` sample
+   above includes this variable; flip it on). This is the switch that makes
+   Flask use `X-Real-IP` for sign-in lockouts and activity logging. Keep it
+   `false` unless the app is only reachable through the trusted proxy.
 3. Do not publish the app port directly to the internet (bind it to localhost
    or firewall it); otherwise clients can bypass NPM and spoof the header.
 
@@ -130,6 +137,7 @@ Set these via environment variables before deploying anywhere real:
 export VDC_ADMIN_USER=you
 export VDC_ADMIN_PASSWORD="a-strong-password"
 export VDC_SECRET="a-random-session-secret"
+export VDC_ADMIN_PATH="a-private-admin-slug"
 ```
 
 The first launch stores the admin account (password hashed) in the SQLite
@@ -139,7 +147,7 @@ what counts, not the original environment variable.
 
 Admin flow:
 
-1. Sign in to **Admin**.
+1. Sign in at `/<VDC_ADMIN_PATH>/login` (e.g. `/a-private-admin-slug/login`).
 2. Upload the new `.xlsx` CRSP release (optionally set its effective date).
 3. Review the parsed counts, the tax rates read from the TEMPLATE sheet, and
    data-quality warnings.
@@ -192,10 +200,9 @@ python -m unittest discover -s tests -v
 app/
   parser.py      workbook parsing and normalisation
   engine.py      classification + KRA calculation formulas
-  db.py          SQLite schema and queries
-  views.py       web routes (calculator + admin upload)
+  db.py          SQLite schema, queries, login lockouts and audit log
+  views.py       web routes (calculator + admin/activity)
 templates/       HTML pages
 static/          CSS and calculator JavaScript
 tests/           golden-value tests against the July 2025 workbook
-PLAN.md          full product and implementation plan
 ```
