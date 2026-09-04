@@ -195,6 +195,68 @@ class AppIntegrationTest(unittest.TestCase):
         self.assertIn(b"Sign-in activity", response.data)
         self.assertIn(b"Successful logins", response.data)
 
+    def test_public_requests_are_logged_for_the_visitor_log(self):
+        headers = {"User-Agent": "VisitorLogTest/1.0"}
+        self.client.get(
+            "/", environ_base={"REMOTE_ADDR": "203.0.113.20"}, headers=headers
+        )
+        # Static assets and admin pages are not visitor events.
+        self.client.get(
+            "/static/style.css?v=4", environ_base={"REMOTE_ADDR": "203.0.113.20"}
+        )
+        self.client.get(
+            "/admin/login", environ_base={"REMOTE_ADDR": "203.0.113.20"}
+        )
+        self.client.get(
+            "/api/search?q=honda civic",
+            environ_base={"REMOTE_ADDR": "203.0.113.20"},
+            headers=headers,
+        )
+        payload = {
+            "route": "direct",
+            "vehicle_type": "passenger",
+            "fuel": "petrol",
+            "engine_cc": 1500,
+            "yom": 2020,
+            "extra_depreciation": 0,
+            "crsp": 1000000,
+        }
+        self.client.post(
+            "/api/calculate",
+            json=payload,
+            environ_base={"REMOTE_ADDR": "203.0.113.21"},
+            headers=headers,
+        )
+
+        counts = db.count_visits(str(self.db_path))
+        self.assertEqual(counts["page"], 1)
+        self.assertEqual(counts["search"], 1)
+        self.assertEqual(counts["calculate"], 1)
+        self.assertEqual(counts["total"], 3)
+        self.assertEqual(counts["unique_ips"], 2)
+
+        visits = db.list_visits(str(self.db_path))
+        self.assertEqual(visits[0]["event_type"], "calculate")
+        self.assertIn("route=direct", visits[0]["detail"])
+        search = next(row for row in visits if row["event_type"] == "search")
+        self.assertEqual(search["detail"], "honda civic")
+        self.assertEqual(search["user_agent"], "VisitorLogTest/1.0")
+
+    def test_admin_visitor_log_page(self):
+        response = self.client.get("/admin/visits")
+        self.assertEqual(response.status_code, 302)
+        self.client.post("/admin/login", data={"username": "admin", "password": "admin123"})
+        self.client.get("/", environ_base={"REMOTE_ADDR": "203.0.113.30"})
+
+        response = self.client.get("/admin/visits")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Visitor log", response.data)
+        self.assertIn(b"Recorded requests", response.data)
+
+        filtered = self.client.get("/admin/visits?type=page")
+        self.assertEqual(filtered.status_code, 200)
+        self.assertIn(b"Page views", filtered.data)
+
     def test_admin_login_and_upload(self):
         login = self.client.post(
             "/admin/login", data={"username": "admin", "password": "admin123"}

@@ -111,6 +111,21 @@ CREATE TABLE IF NOT EXISTS auth_events (
 
 CREATE INDEX IF NOT EXISTS idx_auth_events_lookup
     ON auth_events(event_type, id DESC);
+
+CREATE TABLE IF NOT EXISTS visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    path TEXT NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_visits_lookup
+    ON visits(event_type, id DESC);
+CREATE INDEX IF NOT EXISTS idx_visits_created
+    ON visits(created_at);
 """
 
 
@@ -346,6 +361,102 @@ def list_login_lockouts(db_path: str | Path) -> list[dict[str, Any]]:
             """
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def record_visit(
+    db_path: str | Path,
+    event_type: str,
+    path: str,
+    ip: str = "",
+    user_agent: str = "",
+    detail: str = "",
+) -> None:
+    """Append one public request to the visitor log."""
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO visits
+                (event_type, path, ip, user_agent, detail, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (event_type or "")[:20],
+                (path or "")[:255],
+                (ip or "")[:64],
+                (user_agent or "")[:255],
+                (detail or "")[:500],
+                _now(),
+            ),
+        )
+
+
+def list_visits(
+    db_path: str | Path,
+    event_type: str | None = None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """Return the most recent visitor-log entries, newest first."""
+    limit = max(1, min(int(limit), 1000))
+    with connect(db_path) as conn:
+        if event_type:
+            rows = conn.execute(
+                """
+                SELECT * FROM visits
+                WHERE event_type = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (event_type, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM visits
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def count_visits(db_path: str | Path) -> dict[str, int]:
+    """Visitor-log totals, including today's count and unique IPs."""
+    counts = {
+        "page": 0,
+        "search": 0,
+        "calculate": 0,
+        "other": 0,
+        "total": 0,
+        "today": 0,
+        "unique_ips": 0,
+    }
+    today = datetime.now(timezone.utc).date().isoformat()
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT event_type, COUNT(*) AS c FROM visits GROUP BY event_type"
+        ).fetchall()
+        for row in rows:
+            if row["event_type"] in counts:
+                counts[row["event_type"]] = row["c"]
+        counts["total"] = conn.execute("SELECT COUNT(*) AS c FROM visits").fetchone()["c"]
+        counts["today"] = conn.execute(
+            "SELECT COUNT(*) AS c FROM visits WHERE created_at >= ?", (today,)
+        ).fetchone()["c"]
+        counts["unique_ips"] = conn.execute(
+            "SELECT COUNT(DISTINCT ip) AS c FROM visits WHERE ip != ''"
+        ).fetchone()["c"]
+    return counts
+
+
+def prune_visits(db_path: str | Path, older_than_days: int = 90) -> int:
+    """Delete visitor-log entries older than the retention window."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).isoformat(
+        timespec="seconds"
+    )
+    with connect(db_path) as conn:
+        cur = conn.execute("DELETE FROM visits WHERE created_at < ?", (cutoff,))
+    return cur.rowcount
 
 
 def seed_default_release(db_path: str | Path, workbook_path: Path) -> None:

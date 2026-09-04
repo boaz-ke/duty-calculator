@@ -97,6 +97,40 @@ class LoginLockoutTest(unittest.TestCase):
         self.assertEqual(len(all_events), 2)
         self.assertEqual(all_events[0]["event_type"], "failure")
 
+    def test_visitor_log_records_filters_and_prunes(self):
+        db.record_visit(self.db_path, "page", "/", ip="10.0.0.4", user_agent="UA/1")
+        db.record_visit(self.db_path, "search", "/api/search", ip="10.0.0.5", detail="honda")
+        db.record_visit(
+            self.db_path,
+            "calculate",
+            "/api/calculate",
+            ip="10.0.0.4",
+            detail="route=direct",
+        )
+        db.record_visit(self.db_path, "other", "/api/release", ip="10.0.0.6")
+
+        counts = db.count_visits(self.db_path)
+        self.assertEqual(counts["total"], 4)
+        self.assertEqual(counts["page"], 1)
+        self.assertEqual(counts["search"], 1)
+        self.assertEqual(counts["calculate"], 1)
+        self.assertEqual(counts["other"], 1)
+        self.assertEqual(counts["today"], 4)
+        self.assertEqual(counts["unique_ips"], 3)
+
+        searches = db.list_visits(self.db_path, event_type="search")
+        self.assertEqual(len(searches), 1)
+        self.assertEqual(searches[0]["detail"], "honda")
+
+        # Entries older than the retention window are pruned at startup.
+        past = "2020-01-01T00:00:00+00:00"
+        with db.connect(self.db_path) as conn:
+            conn.execute(
+                "UPDATE visits SET created_at = ? WHERE event_type = 'page'", (past,)
+            )
+        db.prune_visits(self.db_path, older_than_days=90)
+        self.assertEqual(db.count_visits(self.db_path)["total"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

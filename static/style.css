@@ -941,6 +941,26 @@ input[type="radio"] {
     color: var(--ink-2);
 }
 
+.status-page {
+    background: var(--good-soft);
+    color: var(--good);
+}
+
+.status-search {
+    background: var(--info-soft);
+    color: var(--info);
+}
+
+.status-calculate {
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.status-other {
+    background: color-mix(in srgb, var(--ink-3) 12%, transparent);
+    color: var(--ink-2);
+}
+
 .actions {
     display: flex;
     align-items: center;

@@ -62,6 +62,76 @@ def _client_ip() -> str:
     return request.remote_addr or "unknown"
 
 
+def _calculation_detail(payload) -> str:
+    """Build a compact, non-sensitive summary of a calculation request."""
+    if not isinstance(payload, dict):
+        return ""
+    parts = []
+    for key, label in (
+        ("route", "route"),
+        ("vehicle_type", "type"),
+        ("fuel", "fuel"),
+        ("engine_cc", "cc"),
+        ("yom", "year"),
+        ("extra_depreciation", "extra dep"),
+    ):
+        value = payload.get(key)
+        if value not in (None, ""):
+            parts.append(f"{label}={value}")
+    return " · ".join(parts)
+
+
+def _log_visit(event_type: str, path: str, detail: str = "") -> None:
+    """Record one public request; a logging failure must never break the app."""
+    try:
+        db.record_visit(
+            current_app.config["DB_PATH"],
+            event_type,
+            path,
+            ip=_client_ip(),
+            user_agent=request.headers.get("User-Agent", ""),
+            detail=detail,
+        )
+    except Exception:  # noqa: BLE001 - logging is best-effort
+        current_app.logger.exception("Could not record visitor activity.")
+
+
+def register_visitor_logging(app) -> None:
+    """Log public page views, searches and calculations for the admin console."""
+
+    @app.before_request
+    def record_visitor_activity():
+        path = request.path
+        admin_prefix = "/" + str(app.config["ADMIN_PATH"]).strip("/")
+        if (
+            path.startswith("/static/")
+            or path == admin_prefix
+            or path.startswith(admin_prefix + "/")
+        ):
+            return None
+
+        event_type = "page"
+        detail = ""
+        if path.startswith("/api/"):
+            event_type = "other"
+            if path == "/api/search":
+                event_type = "search"
+                detail = (request.args.get("q", "") or "").strip()
+            elif path == "/api/calculate":
+                event_type = "calculate"
+                try:
+                    raw = request.get_data(cache=True)
+                    payload = json.loads(raw) if raw else None
+                except (TypeError, ValueError):
+                    payload = None
+                detail = _calculation_detail(payload)
+        elif request.method != "GET":
+            event_type = "other"
+
+        _log_visit(event_type, path, detail)
+        return None
+
+
 def _live_release():
     return db.live_release(current_app.config["DB_PATH"])
 
@@ -478,4 +548,23 @@ def activity():
         counts=counts,
         active_lockouts=active_lockouts,
         active_type=event_type or "all",
+    )
+
+
+@admin_bp.get("/visits")
+@_login_required
+def visits():
+    db_path = current_app.config["DB_PATH"]
+    requested = (request.args.get("type") or "").strip().lower()
+    event_type = requested if requested in {"page", "search", "calculate", "other"} else None
+
+    events = db.list_visits(db_path, event_type, limit=200)
+    counts = db.count_visits(db_path)
+
+    return render_template(
+        "visits.html",
+        events=events,
+        counts=counts,
+        active_type=event_type or "all",
+        retention_days=current_app.config["VISIT_RETENTION_DAYS"],
     )

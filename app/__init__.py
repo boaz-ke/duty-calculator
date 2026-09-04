@@ -13,6 +13,13 @@ DATA_DIR = PROJECT_ROOT / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 
 
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, ""))
+    except (TypeError, ValueError):
+        return default
+
+
 def _db_path() -> Path:
     return Path(os.environ.get("VDC_DB", DATA_DIR / "vdc.sqlite3"))
 
@@ -30,6 +37,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         ADMIN_USER=os.environ.get("VDC_ADMIN_USER", "admin"),
         ADMIN_PASSWORD=os.environ.get("VDC_ADMIN_PASSWORD", "admin123"),
         ADMIN_PATH=os.environ.get("VDC_ADMIN_PATH", "admin"),
+        VISIT_RETENTION_DAYS=_env_int("VDC_VISIT_RETENTION_DAYS", 90),
         TRUST_X_REAL_IP=os.environ.get("VDC_TRUST_X_REAL_IP", "").lower()
         in {"1", "true", "yes", "on"},
     )
@@ -57,6 +65,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     from . import db
 
     db.init_db(app.config["DB_PATH"])
+    db.prune_visits(app.config["DB_PATH"], app.config["VISIT_RETENTION_DAYS"])
     db.ensure_admin_user(
         app.config["DB_PATH"],
         app.config["ADMIN_USER"],
@@ -68,5 +77,6 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     app.register_blueprint(views.bp)
     app.register_blueprint(views.admin_bp, url_prefix=f"/{admin_path}")
+    views.register_visitor_logging(app)
 
     return app

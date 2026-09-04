@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Visitor log — Admin{% endblock %}
+{% block content %}
+<section class="hero">
+    <div>
+        <h1>Visitor log</h1>
+        <p>Public page views, CRSP searches and duty calculations. Admin pages and static files are not recorded. Times are UTC; entries are kept for {{ retention_days }} days.</p>
+    </div>
+    <div class="actions">
+        <a class="button" href="{{ url_for('admin.activity') }}">Sign-in activity</a>
+        <a class="button" href="{{ url_for('admin.admin') }}">Back to releases</a>
+    </div>
+</section>
+
+<section class="card">
+    <div class="stat-grid">
+        <div class="stat"><strong>{{ counts.total | formatnumber }}</strong><span>Recorded requests</span></div>
+        <div class="stat"><strong>{{ counts.today | formatnumber }}</strong><span>Today</span></div>
+        <div class="stat"><strong>{{ counts.unique_ips | formatnumber }}</strong><span>Unique IP addresses</span></div>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Recent visitor activity</h2>
+    <div class="event-filters">
+        <a class="filter-chip{% if active_type == 'all' %} is-active{% endif %}"
+           href="{{ url_for('admin.visits') }}">All ({{ counts.total | formatnumber }})</a>
+        <a class="filter-chip{% if active_type == 'page' %} is-active{% endif %}"
+           href="{{ url_for('admin.visits', type='page') }}">Page views ({{ counts.page | formatnumber }})</a>
+        <a class="filter-chip{% if active_type == 'search' %} is-active{% endif %}"
+           href="{{ url_for('admin.visits', type='search') }}">Searches ({{ counts.search | formatnumber }})</a>
+        <a class="filter-chip{% if active_type == 'calculate' %} is-active{% endif %}"
+           href="{{ url_for('admin.visits', type='calculate') }}">Calculations ({{ counts.calculate | formatnumber }})</a>
+        <a class="filter-chip{% if active_type == 'other' %} is-active{% endif %}"
+           href="{{ url_for('admin.visits', type='other') }}">Other ({{ counts.other | formatnumber }})</a>
+    </div>
+
+    <table class="release-table">
+        <thead>
+            <tr>
+                <th>When</th>
+                <th>Type</th>
+                <th>Request</th>
+                <th>Visitor</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for event in events %}
+            <tr>
+                <td><small>{{ event.created_at[:16].replace('T', ' ') }} UTC</small></td>
+                <td>
+                    {% if event.event_type == 'page' %}
+                        <span class="status status-page">Page view</span>
+                    {% elif event.event_type == 'search' %}
+                        <span class="status status-search">Search</span>
+                    {% elif event.event_type == 'calculate' %}
+                        <span class="status status-calculate">Calculation</span>
+                    {% else %}
+                        <span class="status status-other">Other</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <code>{{ event.path }}</code>
+                    {% if event.detail %}<br><small>“{{ event.detail }}”</small>{% endif %}
+                </td>
+                <td>
+                    <small><strong>{{ event.ip or "—" }}</strong></small>
+                    {% if event.user_agent %}<br><small title="{{ event.user_agent }}">{{ event.user_agent }}</small>{% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4" class="empty-cell">No visitor activity recorded yet.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

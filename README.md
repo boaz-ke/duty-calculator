@@ -34,6 +34,8 @@ VDC_SECRET="a-long-random-secret"
 VDC_ADMIN_PATH="a-private-admin-slug"
 # Only needed when the app is served through a trusted reverse proxy.
 VDC_TRUST_X_REAL_IP=false
+# Optional: how many days of visitor activity to keep (default 90).
+VDC_VISIT_RETENTION_DAYS=90
 PORT=8000
 ```
 
@@ -64,6 +66,8 @@ docker compose down             # stop (keeps data)
   archive old release, or reactivate a past release.
 - Admin sign-in audit: hidden configurable admin URL, escalating per-IP login
   lockouts, and a sign-in activity view (logins, failed attempts, lockouts).
+- Visitor log: public page views, CRSP searches and duty calculations are
+  recorded with time, IP address and user agent, with an admin-only view.
 - Unit/integration tests with golden values taken straight from the workbook.
 
 ## Run locally
@@ -95,6 +99,7 @@ only reachable by knowing that path:
 - `/a-private-admin-slug` — release management
 - `/a-private-admin-slug/password` — change the admin password
 - `/a-private-admin-slug/activity` — sign-in activity and lockouts
+- `/a-private-admin-slug/visits` — public visitor log
 
 Failed sign-ins are rate limited per IP and the state persists in the database:
 three consecutive failures lock sign-in for 30 minutes. If an IP triggers
@@ -123,6 +128,18 @@ successful logins, failed attempts, lockouts triggered and blocked attempts,
 plus the recent event log (time, event, account/IP) and any IPs currently
 locked out with the time remaining. Logging starts with this version; earlier
 sign-ins from before the feature was deployed are not backfilled.
+
+**Visitor log** (under Admin → Visitor log) shows recent public traffic: page
+views of the calculator, catalogue searches (with the search text), and
+calculation requests (with route, vehicle type, fuel, capacity and year — not
+the entered CRSP). Each entry records the time, path, IP address and user
+agent. Admin pages and static files are excluded, entries are kept for the
+configured retention window (90 days by default via
+`VDC_VISIT_RETENTION_DAYS`), and recording starts with this version, so no
+earlier traffic is backfilled. The same `VDC_TRUST_X_REAL_IP` setting controls
+which IP appears for visitors behind the reverse proxy. This log is intended
+for administrators; it stores visitor IPs and user agents, so keep the admin
+slug private.
 
 Default development credentials:
 
@@ -200,8 +217,8 @@ python -m unittest discover -s tests -v
 app/
   parser.py      workbook parsing and normalisation
   engine.py      classification + KRA calculation formulas
-  db.py          SQLite schema, queries, login lockouts and audit log
-  views.py       web routes (calculator + admin/activity)
+  db.py          SQLite schema, queries, login lockouts, audit + visitor logs
+  views.py       web routes (calculator + admin activity/visitor log)
 templates/       HTML pages
 static/          CSS and calculator JavaScript
 tests/           golden-value tests against the July 2025 workbook
