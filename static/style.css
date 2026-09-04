@@ -216,6 +216,16 @@ textarea {
     background: var(--paper-2);
 }
 
+.topbar .github-link {
+    padding: 8px;
+    border-radius: 50%;
+}
+
+.topbar .github-link:hover {
+    color: var(--brand);
+    background: var(--brand-soft);
+}
+
 .topbar .nav-cta {
     border: 1px solid var(--line);
     border-radius: var(--radius-pill);
