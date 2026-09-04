@@ -30,6 +30,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         ADMIN_USER=os.environ.get("VDC_ADMIN_USER", "admin"),
         ADMIN_PASSWORD=os.environ.get("VDC_ADMIN_PASSWORD", "admin123"),
         ADMIN_PATH=os.environ.get("VDC_ADMIN_PATH", "admin"),
+        TRUST_X_REAL_IP=os.environ.get("VDC_TRUST_X_REAL_IP", "").lower()
+        in {"1", "true", "yes", "on"},
     )
     if test_config:
         app.config.update(test_config)

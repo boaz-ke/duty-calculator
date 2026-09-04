@@ -52,6 +52,16 @@ def _human_duration(seconds: float) -> str:
     return f"{unit} minute" + ("s" if unit != 1 else "")
 
 
+def _client_ip() -> str:
+    """Return the visitor IP, honouring X-Real-IP only when explicitly trusted."""
+    if current_app.config.get("TRUST_X_REAL_IP"):
+        forwarded = (request.headers.get("X-Real-IP") or "").strip()
+        if forwarded:
+            # In case an upstream chain ever sends several values, use the first.
+            return forwarded.split(",")[0].strip() or "unknown"
+    return request.remote_addr or "unknown"
+
+
 def _live_release():
     return db.live_release(current_app.config["DB_PATH"])
 
@@ -233,7 +243,7 @@ def admin_login():
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
-        ip = request.remote_addr or "unknown"
+        ip = _client_ip()
         db_path = current_app.config["DB_PATH"]
         remaining = db.login_lockout_remaining(db_path, ip)
         if remaining is not None:

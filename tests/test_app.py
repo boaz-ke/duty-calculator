@@ -140,6 +140,51 @@ class AppIntegrationTest(unittest.TestCase):
         self.assertEqual(counts["blocked"], 1)
         self.assertEqual(counts["success"], 1)
 
+    def test_x_real_ip_is_used_when_trusted(self):
+        trusted = create_app(
+            {
+                "TESTING": True,
+                "DB_PATH": str(self.db_path),
+                "SECRET_KEY": "test-secret",
+                "ADMIN_USER": "admin",
+                "ADMIN_PASSWORD": "admin123",
+                "TRUST_X_REAL_IP": True,
+            }
+        )
+        client = trusted.test_client()
+        wrong = {"username": "admin", "password": "wrong-password"}
+        for attempt in range(3):
+            response = client.post(
+                "/admin/login",
+                data=wrong,
+                environ_base={"REMOTE_ADDR": "10.0.0.10"},
+                headers={"X-Real-IP": "203.0.113.77"},
+            )
+            if attempt < 2:
+                self.assertIn(b"Invalid credentials", response.data)
+            else:
+                self.assertIn(b"locked for 30 minutes", response.data)
+
+        # A different socket IP with the same forwarded header must stay locked.
+        blocked = client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "admin123"},
+            environ_base={"REMOTE_ADDR": "10.0.0.11"},
+            headers={"X-Real-IP": "203.0.113.77"},
+        )
+        self.assertEqual(blocked.status_code, 200)
+        self.assertIn(b"Too many failed sign-in attempts", blocked.data)
+
+        allowed = client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "admin123"},
+            environ_base={"REMOTE_ADDR": "10.0.0.12"},
+            headers={"X-Real-IP": "198.51.100.4"},
+        )
+        self.assertEqual(allowed.status_code, 302)
+        events = db.list_login_events(str(self.db_path), event_type="success", limit=1)
+        self.assertEqual(events[0]["ip"], "198.51.100.4")
+
     def test_admin_activity_page(self):
         response = self.client.get("/admin/activity")
         self.assertEqual(response.status_code, 302)

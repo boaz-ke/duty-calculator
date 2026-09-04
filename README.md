@@ -93,8 +93,23 @@ Failed sign-ins are rate limited per IP and the state persists in the database:
 three consecutive failures lock sign-in for 30 minutes. If an IP triggers
 another lockout later, the second lockout lasts 24 hours and the third (and any
 after it) lasts one week. A successful sign-in clears the counter. Behind a
-reverse proxy, configure the proxy to forward the real client IP (for example
-with `ProxyFix`) so visitors are not all treated as one address.
+reverse proxy, forward the real client IP as described below so visitors are
+not all treated as one address.
+
+For the Cloudflare → Nginx Proxy Manager → app setup used on
+dutycalculator.sahihi.net:
+
+1. In NPM's Proxy Host **Advanced** tab, trust Cloudflare's edge addresses with
+   `set_real_ip_from <range>` lines for every range in
+   `https://www.cloudflare.com/ips-v4` and `.../ips-v6`, then add
+   `real_ip_header CF-Connecting-IP;`. NPM's bundled config already forwards
+   the resolved address to the app as `X-Real-IP`.
+2. Set `VDC_TRUST_X_REAL_IP=true` in the app environment (add it to the
+   `.env` sample above). This is the switch that makes Flask use `X-Real-IP`
+   for sign-in lockouts and activity logging. Keep it `false` unless the
+   app is only reachable through the trusted proxy.
+3. Do not publish the app port directly to the internet (bind it to localhost
+   or firewall it); otherwise clients can bypass NPM and spoof the header.
 
 **Sign-in activity** (under Admin → Sign-in activity) shows counters for
 successful logins, failed attempts, lockouts triggered and blocked attempts,

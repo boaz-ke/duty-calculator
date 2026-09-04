@@ -9,6 +9,7 @@ services:
       VDC_ADMIN_PASSWORD: "${VDC_ADMIN_PASSWORD:-admin123}"
       VDC_SECRET: "${VDC_SECRET:-please-change-this-secret}"
       VDC_ADMIN_PATH: "${VDC_ADMIN_PATH:-admin}"
+      VDC_TRUST_X_REAL_IP: "${VDC_TRUST_X_REAL_IP:-false}"
     volumes:
       - duty-data:/app/data
     restart: unless-stopped
