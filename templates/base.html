@@ -24,13 +24,11 @@
                 </svg>
             </a>
             {% if session.get('is_admin') %}
-                <a href="{{ url_for('main.change_password') }}">Change password</a>
-                <a href="{{ url_for('main.admin') }}">Admin console</a>
-                <form method="post" action="{{ url_for('main.admin_logout') }}" class="inline-form">
+                <a href="{{ url_for('admin.change_password') }}">Change password</a>
+                <a href="{{ url_for('admin.admin') }}">Admin console</a>
+                <form method="post" action="{{ url_for('admin.admin_logout') }}" class="inline-form">
                     <button type="submit" class="link-button">Sign out</button>
                 </form>
-            {% else %}
-                <a href="{{ url_for('main.admin_login') }}" class="nav-cta">Admin</a>
             {% endif %}
         </nav>
     </div>

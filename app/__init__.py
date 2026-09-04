@@ -1,6 +1,7 @@
 """Vehicle Duty Calculator Flask application."""
 
 import os
+import re
 from pathlib import Path
 
 from flask import Flask
@@ -28,9 +29,18 @@ def create_app(test_config: dict | None = None) -> Flask:
         MAX_CONTENT_LENGTH=50 * 1024 * 1024,
         ADMIN_USER=os.environ.get("VDC_ADMIN_USER", "admin"),
         ADMIN_PASSWORD=os.environ.get("VDC_ADMIN_PASSWORD", "admin123"),
+        ADMIN_PATH=os.environ.get("VDC_ADMIN_PATH", "admin"),
     )
     if test_config:
         app.config.update(test_config)
+
+    admin_path = str(app.config["ADMIN_PATH"]).strip("/")
+    if not admin_path or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*", admin_path):
+        raise RuntimeError(
+            "VDC_ADMIN_PATH must be a simple URL segment such as 'admin' or "
+            "'ops-console' (letters, digits, '-' and '_')."
+        )
+    app.config["ADMIN_PATH"] = admin_path
 
     DATA_DIR.mkdir(exist_ok=True)
     UPLOAD_DIR.mkdir(exist_ok=True)
@@ -55,5 +65,6 @@ def create_app(test_config: dict | None = None) -> Flask:
     from . import views
 
     app.register_blueprint(views.bp)
+    app.register_blueprint(views.admin_bp, url_prefix=f"/{admin_path}")
 
     return app

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -91,11 +91,27 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+    ip TEXT PRIMARY KEY,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    strike_count INTEGER NOT NULL DEFAULT 0,
+    locked_until TEXT,
+    updated_at TEXT NOT NULL
+);
 """
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+LOGIN_ATTEMPT_LIMIT = 3
+LOGIN_LOCKOUTS = (
+    timedelta(minutes=30),
+    timedelta(hours=24),
+    timedelta(weeks=1),
+)
 
 
 def connect(db_path: str | Path) -> sqlite3.Connection:
@@ -146,6 +162,97 @@ def change_admin_password(db_path: str | Path, username: str, new_password: str)
             (generate_password_hash(new_password), _now(), username),
         )
         return cur.rowcount > 0
+
+
+def login_lockout_remaining(db_path: str | Path, ip: str) -> float | None:
+    """Seconds left on an active sign-in lockout for an IP, or None."""
+    if not ip:
+        return None
+    with connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT locked_until FROM login_attempts WHERE ip = ?", (ip,)
+        ).fetchone()
+    if row is None or not row["locked_until"]:
+        return None
+    try:
+        locked_until = datetime.fromisoformat(row["locked_until"])
+    except ValueError:
+        return None
+    remaining = (locked_until - datetime.now(timezone.utc)).total_seconds()
+    return remaining if remaining > 0 else None
+
+
+def record_failed_login(db_path: str | Path, ip: str) -> dict[str, Any]:
+    """Record a failed sign-in attempt for an IP and enforce escalating lockouts.
+
+    Every ``LOGIN_ATTEMPT_LIMIT`` consecutive failures triggers a lockout. The
+    first lockout lasts 30 minutes, the second 24 hours, and the third and any
+    later lockouts last one week.
+    """
+    now = datetime.now(timezone.utc)
+    now_text = now.isoformat(timespec="seconds")
+    with connect(db_path) as conn:
+        row = conn.execute(
+            "SELECT failed_count, strike_count, locked_until FROM login_attempts WHERE ip = ?",
+            (ip,),
+        ).fetchone()
+        if row is None:
+            failed_count = 0
+            strike_count = 0
+            locked_until: str | None = None
+        else:
+            failed_count = row["failed_count"]
+            strike_count = row["strike_count"]
+            locked_until = row["locked_until"]
+
+        if locked_until:
+            try:
+                if datetime.fromisoformat(locked_until) <= now:
+                    # The lockout has expired; start a fresh failure window
+                    # while keeping the escalated strike count.
+                    failed_count = 0
+                    locked_until = None
+            except ValueError:
+                locked_until = None
+
+        failed_count += 1
+        triggered = False
+        lockout_seconds: float | None = None
+        if failed_count >= LOGIN_ATTEMPT_LIMIT:
+            duration = LOGIN_LOCKOUTS[min(strike_count, len(LOGIN_LOCKOUTS) - 1)]
+            lockout_seconds = duration.total_seconds()
+            locked_until = (now + duration).isoformat(timespec="seconds")
+            strike_count += 1
+            failed_count = 0
+            triggered = True
+
+        if row is None:
+            conn.execute(
+                """
+                INSERT INTO login_attempts
+                    (ip, failed_count, strike_count, locked_until, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (ip, failed_count, strike_count, locked_until, now_text),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE login_attempts
+                SET failed_count = ?, strike_count = ?, locked_until = ?, updated_at = ?
+                WHERE ip = ?
+                """,
+                (failed_count, strike_count, locked_until, now_text, ip),
+            )
+    return {"triggered": triggered, "lockout_seconds": lockout_seconds}
+
+
+def clear_login_attempts(db_path: str | Path, ip: str) -> None:
+    """Reset the failure/lockout state for an IP after a successful sign-in."""
+    if not ip:
+        return
+    with connect(db_path) as conn:
+        conn.execute("DELETE FROM login_attempts WHERE ip = ?", (ip,))
 
 
 def seed_default_release(db_path: str | Path, workbook_path: Path) -> None:

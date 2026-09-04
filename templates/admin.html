@@ -10,7 +10,7 @@
 
 <section class="card">
     <h2>Upload new release</h2>
-    <form method="post" action="{{ url_for('main.admin_upload') }}" enctype="multipart/form-data" class="upload-form">
+    <form method="post" action="{{ url_for('admin.admin_upload') }}" enctype="multipart/form-data" class="upload-form">
         <div class="field">
             <label class="field-label" for="file">Workbook (.xlsx)</label>
             <input id="file" name="file" type="file" accept=".xlsx" required>
@@ -46,14 +46,14 @@
                 <td>{{ release.catalogue_count | formatnumber }}</td>
                 <td>{{ (release.created_at or "")[:10] }}</td>
                 <td class="actions">
-                    <a class="button small" href="{{ url_for('main.review_release', release_id=release.id) }}">Review</a>
+                    <a class="button small" href="{{ url_for('admin.review_release', release_id=release.id) }}">Review</a>
                     {% if release.status != 'live' %}
-                    <form method="post" action="{{ url_for('main.reactivate_release', release_id=release.id) }}">
+                    <form method="post" action="{{ url_for('admin.reactivate_release', release_id=release.id) }}">
                         <button type="submit" class="button small">Make live</button>
                     </form>
                     {% endif %}
                     {% if release.status == 'draft' %}
-                    <form method="post" action="{{ url_for('main.discard_release', release_id=release.id) }}"
+                    <form method="post" action="{{ url_for('admin.discard_release', release_id=release.id) }}"
                           onsubmit="return confirm('Discard this draft?')">
                         <button type="submit" class="button small danger">Discard</button>
                     </form>
@@ -67,4 +67,3 @@
     </table>
 </section>
 {% endblock %}
-

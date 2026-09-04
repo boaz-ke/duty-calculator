@@ -8,11 +8,11 @@
     </div>
     <div class="actions">
         {% if release.status != 'live' %}
-        <form method="post" action="{{ url_for('main.publish_release', release_id=release.id) }}">
+        <form method="post" action="{{ url_for('admin.publish_release', release_id=release.id) }}">
             <button type="submit" class="primary-button">Approve &amp; make live</button>
         </form>
         {% endif %}
-        <a class="button" href="{{ url_for('main.admin') }}">Back to releases</a>
+        <a class="button" href="{{ url_for('admin.admin') }}">Back to releases</a>
     </div>
 </section>
 

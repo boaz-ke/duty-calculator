@@ -29,6 +29,7 @@ create a `.env` file in the project folder:
 VDC_ADMIN_USER=you
 VDC_ADMIN_PASSWORD="a-strong-password"
 VDC_SECRET="a-long-random-secret"
+VDC_ADMIN_PATH="a-private-admin-slug"
 PORT=8000
 ```
 
@@ -78,6 +79,23 @@ production WSGI server (e.g. gunicorn, as in the Dockerfile) when deploying.
 
 ## Admin
 
+The admin area has **no public link** in the page header. Its URL is mounted
+under `VDC_ADMIN_PATH` (default `admin` when unset), so with the example above
+it lives at `/a-private-admin-slug/login`. Pick a random, unguessable slug and
+keep it out of the URL whenever you share the site. The full admin surface is
+only reachable by knowing that path:
+
+- `/a-private-admin-slug/login` — sign in
+- `/a-private-admin-slug` — release management
+- `/a-private-admin-slug/password` — change the admin password
+
+Failed sign-ins are rate limited per IP and the state persists in the database:
+three consecutive failures lock sign-in for 30 minutes. If an IP triggers
+another lockout later, the second lockout lasts 24 hours and the third (and any
+after it) lasts one week. A successful sign-in clears the counter. Behind a
+reverse proxy, configure the proxy to forward the real client IP (for example
+with `ProxyFix`) so visitors are not all treated as one address.
+
 Default development credentials:
 
 ```text
@@ -95,8 +113,8 @@ export VDC_SECRET="a-random-session-secret"
 
 The first launch stores the admin account (password hashed) in the SQLite
 database. After that, the admin can change the password from the app
-(**Change password** in the top navigation); the database password is what
-counts, not the original environment variable.
+(**Change password**, visible only after signing in); the database password is
+what counts, not the original environment variable.
 
 Admin flow:
 

@@ -86,6 +86,54 @@ class AppIntegrationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"calculator.js", response.data)
 
+    def test_public_page_has_no_admin_link(self):
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"nav-cta", response.data)
+        self.assertNotIn(b"Admin console", response.data)
+
+    def test_admin_path_is_configurable(self):
+        other = create_app(
+            {
+                "TESTING": True,
+                "DB_PATH": str(self.db_path),
+                "SECRET_KEY": "test-secret",
+                "ADMIN_USER": "admin",
+                "ADMIN_PASSWORD": "admin123",
+                "ADMIN_PATH": "ops-console",
+            }
+        )
+        client = other.test_client()
+        self.assertEqual(client.get("/ops-console/login").status_code, 200)
+        self.assertEqual(client.get("/admin/login").status_code, 404)
+
+    def test_admin_login_is_locked_after_three_failures(self):
+        wrong = {"username": "admin", "password": "wrong-password"}
+        for attempt in range(3):
+            response = self.client.post(
+                "/admin/login", data=wrong, environ_base={"REMOTE_ADDR": "203.0.113.7"}
+            )
+            self.assertEqual(response.status_code, 200)
+            if attempt < 2:
+                self.assertIn(b"Invalid credentials", response.data)
+            else:
+                self.assertIn(b"locked for 30 minutes", response.data)
+
+        blocked = self.client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "admin123"},
+            environ_base={"REMOTE_ADDR": "203.0.113.7"},
+        )
+        self.assertEqual(blocked.status_code, 200)
+        self.assertIn(b"Too many failed sign-in attempts", blocked.data)
+
+        allowed = self.client.post(
+            "/admin/login",
+            data={"username": "admin", "password": "admin123"},
+            environ_base={"REMOTE_ADDR": "198.51.100.9"},
+        )
+        self.assertEqual(allowed.status_code, 302)
+
     def test_admin_login_and_upload(self):
         login = self.client.post(
             "/admin/login", data={"username": "admin", "password": "admin123"}

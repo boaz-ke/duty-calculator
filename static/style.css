@@ -226,17 +226,6 @@ textarea {
     background: var(--brand-soft);
 }
 
-.topbar .nav-cta {
-    border: 1px solid var(--line);
-    border-radius: var(--radius-pill);
-}
-
-.topbar .nav-cta:hover {
-    border-color: var(--brand-line);
-    color: var(--brand);
-    background: var(--brand-soft);
-}
-
 .inline-form {
     margin: 0;
 }

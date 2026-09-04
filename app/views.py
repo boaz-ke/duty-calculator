@@ -24,6 +24,7 @@ from .__init__ import UPLOAD_DIR
 
 
 bp = Blueprint("main", __name__)
+admin_bp = Blueprint("admin", __name__)
 
 
 def _login_required(view):
@@ -31,10 +32,23 @@ def _login_required(view):
     def wrapped(*args, **kwargs):
         if not session.get("is_admin"):
             flash("Please sign in as an administrator first.", "warning")
-            return redirect(url_for("main.admin_login", next=request.path))
+            return redirect(url_for("admin.admin_login", next=request.path))
         return view(*args, **kwargs)
 
     return wrapped
+
+
+def _human_duration(seconds: float) -> str:
+    """Turn a lockout duration in seconds into a friendly 'about X' label."""
+    seconds = max(1, int(seconds))
+    if seconds >= 86400:
+        unit = max(1, (seconds + 86399) // 86400)
+        return f"{unit} day" + ("s" if unit != 1 else "")
+    if seconds >= 3600:
+        unit = max(1, (seconds + 3599) // 3600)
+        return f"{unit} hour" + ("s" if unit != 1 else "")
+    unit = max(1, (seconds + 59) // 60)
+    return f"{unit} minute" + ("s" if unit != 1 else "")
 
 
 def _live_release():
@@ -213,21 +227,40 @@ def api_calculate():
     )
 
 
-@bp.route("/admin/login", methods=["GET", "POST"])
+@admin_bp.route("/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
+        ip = request.remote_addr or "unknown"
+        db_path = current_app.config["DB_PATH"]
+        remaining = db.login_lockout_remaining(db_path, ip)
+        if remaining is not None:
+            flash(
+                f"Too many failed sign-in attempts. Try again in about "
+                f"{_human_duration(remaining)}.",
+                "error",
+            )
+            return render_template("login.html")
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
-        if db.verify_admin_password(current_app.config["DB_PATH"], username, password):
+        if db.verify_admin_password(db_path, username, password):
+            db.clear_login_attempts(db_path, ip)
             session["is_admin"] = True
             session["admin_username"] = username
             flash("Signed in.", "success")
-            return redirect(request.args.get("next") or url_for("main.admin"))
-        flash("Invalid credentials.", "error")
+            return redirect(request.args.get("next") or url_for("admin.admin"))
+        outcome = db.record_failed_login(db_path, ip)
+        if outcome["triggered"]:
+            flash(
+                f"Too many failed sign-in attempts. Sign-in is locked for "
+                f"{_human_duration(outcome['lockout_seconds'] or 0)}.",
+                "error",
+            )
+        else:
+            flash("Invalid credentials.", "error")
     return render_template("login.html")
 
 
-@bp.post("/admin/logout")
+@admin_bp.post("/logout")
 def admin_logout():
     session.pop("is_admin", None)
     session.pop("admin_username", None)
@@ -235,7 +268,7 @@ def admin_logout():
     return redirect(url_for("main.index"))
 
 
-@bp.get("/admin")
+@admin_bp.get("")
 @_login_required
 def admin():
     releases = db.list_releases(current_app.config["DB_PATH"])
@@ -246,7 +279,7 @@ def admin():
     )
 
 
-@bp.route("/admin/password", methods=["GET", "POST"])
+@admin_bp.route("/password", methods=["GET", "POST"])
 @_login_required
 def change_password():
     username = session.get("admin_username") or current_app.config["ADMIN_USER"]
@@ -264,31 +297,31 @@ def change_password():
         else:
             db.change_admin_password(db_path, username, new_password)
             flash("Password updated successfully.", "success")
-            return redirect(url_for("main.admin"))
+            return redirect(url_for("admin.admin"))
     return render_template("password.html", username=username)
 
 
-@bp.post("/admin/upload")
+@admin_bp.post("/upload")
 @_login_required
 def admin_upload():
     uploaded = request.files.get("file")
     if not uploaded or not uploaded.filename:
         flash("Choose a CRSP workbook to upload.", "error")
-        return redirect(url_for("main.admin"))
+        return redirect(url_for("admin.admin"))
     if not uploaded.filename.lower().endswith(".xlsx"):
         flash("Only .xlsx files are accepted.", "error")
-        return redirect(url_for("main.admin"))
+        return redirect(url_for("admin.admin"))
 
     raw = uploaded.read()
     try:
         parsed = parser.parse_workbook(io.BytesIO(raw), source_filename=uploaded.filename)
     except Exception as exc:  # noqa: BLE001 - surface any parse failure to the admin
         flash(f"Could not read the workbook: {exc}", "error")
-        return redirect(url_for("main.admin"))
+        return redirect(url_for("admin.admin"))
 
     if parsed["errors"]:
         flash("The workbook could not be validated: " + "; ".join(parsed["errors"]), "error")
-        return redirect(url_for("main.admin"))
+        return redirect(url_for("admin.admin"))
 
     effective_date = (request.form.get("effective_date") or "").strip() or parsed["effective_date"]
     db_path = current_app.config["DB_PATH"]
@@ -308,17 +341,17 @@ def admin_upload():
         conn.execute("UPDATE releases SET sha256 = ? WHERE id = ?", (digest, release_id))
 
     flash("Workbook parsed and saved as a draft release.", "success")
-    return redirect(url_for("main.review_release", release_id=release_id))
+    return redirect(url_for("admin.review_release", release_id=release_id))
 
 
-@bp.get("/admin/releases/<int:release_id>")
+@admin_bp.get("/releases/<int:release_id>")
 @_login_required
 def review_release(release_id: int):
     db_path = current_app.config["DB_PATH"]
     release = db.get_release(db_path, release_id)
     if not release:
         flash("Release not found.", "error")
-        return redirect(url_for("main.admin"))
+        return redirect(url_for("admin.admin"))
     release_data = dict(release)
     try:
         counts = json.loads(release_data.get("counts_json") or "{}")
@@ -339,7 +372,7 @@ def review_release(release_id: int):
     )
 
 
-@bp.post("/admin/releases/<int:release_id>/publish")
+@admin_bp.post("/releases/<int:release_id>/publish")
 @_login_required
 def publish_release(release_id: int):
     db_path = current_app.config["DB_PATH"]
@@ -351,10 +384,10 @@ def publish_release(release_id: int):
     else:
         db.set_release_status(db_path, release_id, "live")
         flash(f"{release['label']} is now the live CRSP release.", "success")
-    return redirect(url_for("main.admin"))
+    return redirect(url_for("admin.admin"))
 
 
-@bp.post("/admin/releases/<int:release_id>/discard")
+@admin_bp.post("/releases/<int:release_id>/discard")
 @_login_required
 def discard_release(release_id: int):
     db_path = current_app.config["DB_PATH"]
@@ -366,10 +399,10 @@ def discard_release(release_id: int):
     else:
         db.delete_draft(db_path, release_id)
         flash("Draft release discarded.", "success")
-    return redirect(url_for("main.admin"))
+    return redirect(url_for("admin.admin"))
 
 
-@bp.post("/admin/releases/<int:release_id>/reactivate")
+@admin_bp.post("/releases/<int:release_id>/reactivate")
 @_login_required
 def reactivate_release(release_id: int):
     db_path = current_app.config["DB_PATH"]
@@ -379,4 +412,4 @@ def reactivate_release(release_id: int):
     else:
         db.set_release_status(db_path, release_id, "live")
         flash(f"{release['label']} re-activated as the live CRSP release.", "success")
-    return redirect(url_for("main.admin"))
+    return redirect(url_for("admin.admin"))
