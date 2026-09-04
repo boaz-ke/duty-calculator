@@ -19,6 +19,7 @@ from flask import (
     url_for,
 )
 from werkzeug.utils import secure_filename
+from urllib.parse import urlsplit
 
 from . import db, engine, parser
 from .__init__ import UPLOAD_DIR
@@ -266,7 +267,11 @@ def admin_login():
             session["is_admin"] = True
             session["admin_username"] = username
             flash("Signed in.", "success")
-            return redirect(request.args.get("next") or url_for("admin.admin"))
+            next_url = request.args.get("next")
+            if next_url and urlsplit(next_url).netloc:
+                # Reject absolute / scheme-relative URLs to prevent open redirects.
+                next_url = None
+            return redirect(next_url or url_for("admin.admin"))
         outcome = db.record_failed_login(db_path, ip)
         db.record_login_event(db_path, "failure", ip=ip, username=username)
         if outcome["triggered"]:
