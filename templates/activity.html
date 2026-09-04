@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Sign-in activity — Admin{% endblock %}
+{% block content %}
+<section class="hero">
+    <div>
+        <h1>Sign-in activity</h1>
+        <p>Logins, failed attempts and lockouts across the admin sign-in flow. Times are UTC.</p>
+    </div>
+    <div class="actions">
+        <a class="button" href="{{ url_for('admin.admin') }}">Back to releases</a>
+    </div>
+</section>
+
+<section class="card">
+    <div class="stat-grid">
+        <div class="stat"><strong>{{ counts.success }}</strong><span>Successful logins</span></div>
+        <div class="stat"><strong>{{ counts.failure }}</strong><span>Failed attempts</span></div>
+        <div class="stat"><strong>{{ counts.lockout }}</strong><span>Lockouts triggered</span></div>
+        <div class="stat"><strong>{{ active_lockouts|length }}</strong><span>Active lockouts</span></div>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Active lockouts</h2>
+    {% if active_lockouts %}
+    <table class="release-table">
+        <thead>
+            <tr>
+                <th>IP address</th>
+                <th>Lockout</th>
+                <th>Remaining</th>
+                <th>Expires</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for lockout in active_lockouts %}
+            <tr>
+                <td><code>{{ lockout.ip }}</code></td>
+                <td>#{{ lockout.strike_count }}</td>
+                <td>{{ lockout.remaining_label }}</td>
+                <td><small>{{ lockout.expires_at[:16].replace('T', ' ') }} UTC</small></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No IP addresses are currently locked out.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Recent events</h2>
+    <div class="event-filters">
+        <a class="filter-chip{% if active_type == 'all' %} is-active{% endif %}"
+           href="{{ url_for('admin.activity') }}">All ({{ counts.success + counts.failure + counts.lockout + counts.blocked }})</a>
+        <a class="filter-chip{% if active_type == 'success' %} is-active{% endif %}"
+           href="{{ url_for('admin.activity', type='success') }}">Signed in ({{ counts.success }})</a>
+        <a class="filter-chip{% if active_type == 'failure' %} is-active{% endif %}"
+           href="{{ url_for('admin.activity', type='failure') }}">Failed ({{ counts.failure }})</a>
+        <a class="filter-chip{% if active_type == 'lockout' %} is-active{% endif %}"
+           href="{{ url_for('admin.activity', type='lockout') }}">Lockouts ({{ counts.lockout }})</a>
+        <a class="filter-chip{% if active_type == 'blocked' %} is-active{% endif %}"
+           href="{{ url_for('admin.activity', type='blocked') }}">Blocked ({{ counts.blocked }})</a>
+    </div>
+
+    <table class="release-table">
+        <thead>
+            <tr>
+                <th>When</th>
+                <th>Event</th>
+                <th>Account / IP</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for event in events %}
+            <tr>
+                <td><small>{{ event.created_at[:16].replace('T', ' ') }} UTC</small></td>
+                <td>
+                    {% if event.event_type == 'success' %}
+                        <span class="status status-success">Signed in</span>
+                    {% elif event.event_type == 'failure' %}
+                        <span class="status status-failure">Failed sign-in</span>
+                    {% elif event.event_type == 'lockout' %}
+                        <span class="status status-lockout">Lockout triggered</span>
+                    {% else %}
+                        <span class="status status-blocked">Blocked</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if event.username %}<strong>{{ event.username }}</strong><br>{% endif %}
+                    <small>{{ event.ip }}</small>
+                </td>
+                <td><small>{{ event.detail or "—" }}</small></td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4" class="empty-cell">No matching events yet.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

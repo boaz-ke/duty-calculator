@@ -25,6 +25,7 @@
             </a>
             {% if session.get('is_admin') %}
                 <a href="{{ url_for('admin.change_password') }}">Change password</a>
+                <a href="{{ url_for('admin.activity') }}">Sign-in activity</a>
                 <a href="{{ url_for('admin.admin') }}">Admin console</a>
                 <form method="post" action="{{ url_for('admin.admin_logout') }}" class="inline-form">
                     <button type="submit" class="link-button">Sign out</button>

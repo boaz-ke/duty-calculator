@@ -363,6 +363,33 @@ main {
     background: var(--brand-soft);
 }
 
+.filter-chip {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    padding: 5px 13px;
+    background: var(--paper);
+    color: var(--ink-2);
+    font-size: .84rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+
+.filter-chip:hover,
+.filter-chip.is-active {
+    border-color: var(--brand-line);
+    color: var(--brand);
+    background: var(--brand-soft);
+}
+
+.event-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
 /* ---------- Two-column workspace ---------- */
 
 .grid {
@@ -890,6 +917,26 @@ input[type="radio"] {
 }
 
 .status-archived {
+    background: color-mix(in srgb, var(--ink-3) 12%, transparent);
+    color: var(--ink-2);
+}
+
+.status-success {
+    background: var(--good-soft);
+    color: var(--good);
+}
+
+.status-failure {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.status-lockout {
+    background: var(--warn-soft);
+    color: var(--warn);
+}
+
+.status-blocked {
     background: color-mix(in srgb, var(--ink-3) 12%, transparent);
     color: var(--ink-2);
 }

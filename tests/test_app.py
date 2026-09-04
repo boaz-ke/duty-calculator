@@ -134,6 +134,22 @@ class AppIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(allowed.status_code, 302)
 
+        counts = db.count_login_events(str(self.db_path))
+        self.assertEqual(counts["failure"], 3)
+        self.assertEqual(counts["lockout"], 1)
+        self.assertEqual(counts["blocked"], 1)
+        self.assertEqual(counts["success"], 1)
+
+    def test_admin_activity_page(self):
+        response = self.client.get("/admin/activity")
+        self.assertEqual(response.status_code, 302)
+        self.client.post("/admin/login", data={"username": "admin", "password": "admin123"})
+
+        response = self.client.get("/admin/activity")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Sign-in activity", response.data)
+        self.assertIn(b"Successful logins", response.data)
+
     def test_admin_login_and_upload(self):
         login = self.client.post(
             "/admin/login", data={"username": "admin", "password": "admin123"}

@@ -99,6 +99,18 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     locked_until TEXT,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS auth_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    username TEXT NOT NULL DEFAULT '',
+    ip TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_events_lookup
+    ON auth_events(event_type, id DESC);
 """
 
 
@@ -253,6 +265,87 @@ def clear_login_attempts(db_path: str | Path, ip: str) -> None:
         return
     with connect(db_path) as conn:
         conn.execute("DELETE FROM login_attempts WHERE ip = ?", (ip,))
+
+
+def record_login_event(
+    db_path: str | Path,
+    event_type: str,
+    ip: str = "",
+    username: str = "",
+    detail: str = "",
+) -> None:
+    """Append a sign-in event to the audit log."""
+    with connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO auth_events
+                (event_type, username, ip, detail, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                event_type,
+                (username or "")[:80],
+                (ip or "")[:64],
+                (detail or "")[:255],
+                _now(),
+            ),
+        )
+
+
+def list_login_events(
+    db_path: str | Path,
+    event_type: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return the most recent sign-in events, newest first."""
+    limit = max(1, min(int(limit), 500))
+    with connect(db_path) as conn:
+        if event_type:
+            rows = conn.execute(
+                """
+                SELECT * FROM auth_events
+                WHERE event_type = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (event_type, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM auth_events
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def count_login_events(db_path: str | Path) -> dict[str, int]:
+    """Total sign-in events by type (success, failure, lockout, blocked)."""
+    counts = {"success": 0, "failure": 0, "lockout": 0, "blocked": 0}
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT event_type, COUNT(*) AS c FROM auth_events GROUP BY event_type"
+        ).fetchall()
+    for row in rows:
+        counts[row["event_type"]] = row["c"]
+    return counts
+
+
+def list_login_lockouts(db_path: str | Path) -> list[dict[str, Any]]:
+    """Return all login-attempt rows that currently carry a lockout."""
+    with connect(db_path) as conn:
+        rows = conn.execute(
+            """
+            SELECT ip, strike_count, locked_until, updated_at
+            FROM login_attempts
+            WHERE locked_until IS NOT NULL
+            ORDER BY locked_until DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def seed_default_release(db_path: str | Path, workbook_path: Path) -> None:

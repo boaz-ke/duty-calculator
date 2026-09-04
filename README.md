@@ -96,6 +96,12 @@ after it) lasts one week. A successful sign-in clears the counter. Behind a
 reverse proxy, configure the proxy to forward the real client IP (for example
 with `ProxyFix`) so visitors are not all treated as one address.
 
+**Sign-in activity** (under Admin → Sign-in activity) shows counters for
+successful logins, failed attempts, lockouts triggered and blocked attempts,
+plus the recent event log (time, event, account/IP) and any IPs currently
+locked out with the time remaining. Logging starts with this version; earlier
+sign-ins from before the feature was deployed are not backfilled.
+
 Default development credentials:
 
 ```text

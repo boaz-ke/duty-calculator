@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+from datetime import datetime, timezone
 from functools import wraps
 from flask import (
     Blueprint,
@@ -230,29 +231,46 @@ def api_calculate():
 @admin_bp.route("/login", methods=["GET", "POST"])
 def admin_login():
     if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
         ip = request.remote_addr or "unknown"
         db_path = current_app.config["DB_PATH"]
         remaining = db.login_lockout_remaining(db_path, ip)
         if remaining is not None:
+            db.record_login_event(
+                db_path,
+                "blocked",
+                ip=ip,
+                username=username,
+                detail="Locked out",
+            )
             flash(
                 f"Too many failed sign-in attempts. Try again in about "
                 f"{_human_duration(remaining)}.",
                 "error",
             )
             return render_template("login.html")
-        username = (request.form.get("username") or "").strip()
-        password = request.form.get("password") or ""
         if db.verify_admin_password(db_path, username, password):
             db.clear_login_attempts(db_path, ip)
+            db.record_login_event(db_path, "success", ip=ip, username=username)
             session["is_admin"] = True
             session["admin_username"] = username
             flash("Signed in.", "success")
             return redirect(request.args.get("next") or url_for("admin.admin"))
         outcome = db.record_failed_login(db_path, ip)
+        db.record_login_event(db_path, "failure", ip=ip, username=username)
         if outcome["triggered"]:
+            lockout_label = _human_duration(outcome["lockout_seconds"] or 0)
+            db.record_login_event(
+                db_path,
+                "lockout",
+                ip=ip,
+                username=username,
+                detail=f"Locked for {lockout_label}",
+            )
             flash(
                 f"Too many failed sign-in attempts. Sign-in is locked for "
-                f"{_human_duration(outcome['lockout_seconds'] or 0)}.",
+                f"{lockout_label}.",
                 "error",
             )
         else:
@@ -413,3 +431,41 @@ def reactivate_release(release_id: int):
         db.set_release_status(db_path, release_id, "live")
         flash(f"{release['label']} re-activated as the live CRSP release.", "success")
     return redirect(url_for("admin.admin"))
+
+
+@admin_bp.get("/activity")
+@_login_required
+def activity():
+    db_path = current_app.config["DB_PATH"]
+    requested = (request.args.get("type") or "").strip().lower()
+    event_type = requested if requested in {"success", "failure", "lockout", "blocked"} else None
+
+    events = db.list_login_events(db_path, event_type)
+    counts = db.count_login_events(db_path)
+
+    active_lockouts = []
+    now = datetime.now(timezone.utc)
+    for row in db.list_login_lockouts(db_path):
+        try:
+            locked_until = datetime.fromisoformat(row["locked_until"])
+        except (TypeError, ValueError):
+            continue
+        remaining = (locked_until - now).total_seconds()
+        if remaining <= 0:
+            continue
+        active_lockouts.append(
+            {
+                "ip": row["ip"],
+                "strike_count": row["strike_count"],
+                "expires_at": locked_until.isoformat(timespec="minutes"),
+                "remaining_label": _human_duration(remaining),
+            }
+        )
+
+    return render_template(
+        "activity.html",
+        events=events,
+        counts=counts,
+        active_lockouts=active_lockouts,
+        active_type=event_type or "all",
+    )

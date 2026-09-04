@@ -73,6 +73,30 @@ class LoginLockoutTest(unittest.TestCase):
         self.assertTrue(outcome["triggered"])
         self.assertEqual(outcome["lockout_seconds"], 30 * 60)
 
+    def test_event_log_records_and_filters(self):
+        db.record_login_event(self.db_path, "success", ip="10.0.0.4", username="admin")
+        db.record_login_event(self.db_path, "failure", ip="10.0.0.5", username="nobody")
+        db.record_login_event(
+            self.db_path, "lockout", ip="10.0.0.5", username="nobody", detail="Locked for 30 minutes"
+        )
+        db.record_login_event(self.db_path, "blocked", ip="10.0.0.5", username="nobody")
+        db.record_login_event(self.db_path, "failure", ip="10.0.0.6", username="admin")
+
+        counts = db.count_login_events(self.db_path)
+        self.assertEqual(counts["success"], 1)
+        self.assertEqual(counts["failure"], 2)
+        self.assertEqual(counts["lockout"], 1)
+        self.assertEqual(counts["blocked"], 1)
+
+        failures = db.list_login_events(self.db_path, event_type="failure")
+        self.assertEqual(len(failures), 2)
+        self.assertEqual(failures[0]["username"], "admin")
+        self.assertEqual(failures[1]["username"], "nobody")
+
+        all_events = db.list_login_events(self.db_path, limit=2)
+        self.assertEqual(len(all_events), 2)
+        self.assertEqual(all_events[0]["event_type"], "failure")
+
 
 if __name__ == "__main__":
     unittest.main()
