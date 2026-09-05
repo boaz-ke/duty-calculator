@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import quote
 
 from app import create_app, db
 
@@ -139,6 +140,37 @@ class AppIntegrationTest(unittest.TestCase):
         self.assertEqual(counts["lockout"], 1)
         self.assertEqual(counts["blocked"], 1)
         self.assertEqual(counts["success"], 1)
+
+    def test_admin_login_rejects_unsafe_next_redirect_targets(self):
+        unsafe = [
+            "https://evil.example/phish",
+            "//evil.example/phish",
+            "http:evil.example/phish",
+            "http:/evil.example/phish",
+            "https:/evil.example/phish",
+            "javascript:alert(1)",
+            "data:text/html,<script>alert(1)</script>",
+            "/\\evil.example/phish",
+            "\\\\evil.example/phish",
+            "///evil.example/phish",
+        ]
+        for index, target in enumerate(unsafe):
+            ip = f"203.0.113.{100 + index}"
+            response = self.client.post(
+                f"/admin/login?next={quote(target, safe='')}",
+                data={"username": "admin", "password": "admin123"},
+                environ_base={"REMOTE_ADDR": ip},
+            )
+            self.assertEqual(response.status_code, 302, target)
+            self.assertEqual(response.headers["Location"], "/admin", target)
+
+        safe = self.client.post(
+            "/admin/login?next=/admin/activity",
+            data={"username": "admin", "password": "admin123"},
+            environ_base={"REMOTE_ADDR": "203.0.113.200"},
+        )
+        self.assertEqual(safe.status_code, 302)
+        self.assertEqual(safe.headers["Location"], "/admin/activity")
 
     def test_x_real_ip_is_used_when_trusted(self):
         trusted = create_app(

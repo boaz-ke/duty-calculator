@@ -7,6 +7,7 @@ import io
 import json
 from datetime import datetime, timezone
 from functools import wraps
+from urllib.parse import urlsplit
 from flask import (
     Blueprint,
     current_app,
@@ -60,6 +61,20 @@ def _client_ip() -> str:
             # In case an upstream chain ever sends several values, use the first.
             return forwarded.split(",")[0].strip() or "unknown"
     return request.remote_addr or "unknown"
+
+
+def _safe_redirect_target(target: str | None) -> bool:
+    """Allow only same-origin absolute paths as post-login redirects."""
+    if not target:
+        return False
+    parsed = urlsplit(target)
+    return (
+        not parsed.scheme
+        and not parsed.netloc
+        and target.startswith("/")
+        and not target.startswith("//")
+        and "\\" not in target
+    )
 
 
 def _calculation_detail(payload) -> str:
@@ -336,7 +351,12 @@ def admin_login():
             session["is_admin"] = True
             session["admin_username"] = username
             flash("Signed in.", "success")
-            return redirect(request.args.get("next") or url_for("admin.admin"))
+            next_url = request.args.get("next")
+            if not _safe_redirect_target(next_url):
+                # Reject external, scheme-relative and non-http schemes to
+                # prevent open redirects after sign-in (CWE-601).
+                next_url = None
+            return redirect(next_url or url_for("admin.admin"))
         outcome = db.record_failed_login(db_path, ip)
         db.record_login_event(db_path, "failure", ip=ip, username=username)
         if outcome["triggered"]:
